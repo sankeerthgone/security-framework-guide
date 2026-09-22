@@ -113,6 +113,15 @@ td .desc{display:block;color:var(--ink-2);font-size:.86rem;margin-top:.1rem}
 .band.amber{border-color:var(--amber);color:var(--amber);background:var(--amber-soft)}
 .band.accent{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
 
+/* lifecycle wrapper */
+.lifecycle{border:1px dashed var(--rule);border-radius:var(--radius);padding:.6rem;background:var(--surface-2)}
+.lifecycle .track{margin-bottom:0}
+.wrap-band{font-size:.78rem;color:var(--accent);background:var(--accent-soft);border:1px solid var(--accent);
+  border-radius:4px;padding:.25rem .6rem;margin-bottom:.5rem;display:inline-block}
+.loop-band{position:relative;margin-top:.5rem;border-top:1px dashed var(--amber);padding-top:.4rem}
+.loop-band span{font-size:.78rem;color:var(--amber)}
+.loop-band::before{content:'←';position:absolute;left:0;top:-.72rem;background:var(--surface-2);color:var(--amber);padding:0 .25rem;font-size:.8rem}
+
 /* flow: inputs -> outputs */
 .io{display:flex;align-items:stretch;gap:.75rem}
 .io .panel{flex:1}
@@ -305,7 +314,7 @@ registerStage({
   externalRefs:['NIST CSF 2.0 — Identify (ID) function','CIS Controls v8 — Control 1 (Inventory of enterprise assets), Control 3 (Data protection)'],
   greenfield:'Build the inventory alongside the architecture as services are designed — there is little legacy to discover, so focus discovery on cloud tenants, identity providers and any inherited supplier connections.',
   existing:'Run structured discovery against live environments: automated asset/cloud discovery tools, directory exports, data flow interviews with service owners, and reconciliation against any existing (likely incomplete) CMDB.',
-  outputs:['Service and asset inventory','Data flow map with classification','Identity and directory inventory','Gap register versus the 15 baseline domains'],
+  outputs:['Service and asset inventory','Data flow map with classification','Identity and directory inventory','Gap register versus the 15 baseline domains','Risk register with rated risks and treatment decisions'],
   gate:'inventory covers all in-scope services named in the Govern scope statement, data flows are mapped for the reference service, and the gap register is populated against all 15 domains.',
   bestPractices:[
     {text:'Automate discovery wherever possible (cloud APIs, EDR/agent inventories, directory exports) — manual spreadsheets go stale within weeks.', stepRef:'S2.02'},
@@ -353,6 +362,8 @@ registerStage({
       how:['Flag any discovery finding that represents immediate, material exposure (e.g. internet-exposed admin interface).','Refer these into the Govern urgent-protection parallel track rather than waiting for the full baseline rollout.','Confirm each referral is acknowledged by the relevant domain delegate.']},
     {id:'S2.12', title:'Assign inventory ownership and refresh cadence', accountable:'Governance Lead', evidence:'Inventory ownership record',
       how:['Name an owner responsible for keeping each inventory (service, asset, identity, data flow) current.','Set a refresh cadence (e.g. quarterly) and a trigger-based refresh on major change.','Record the cadence in the proposed Asset & Service Inventory Standard.']},
+    {id:'S2.12b', title:'Assess and rate risk against the discovered estate', accountable:'Security Architecture Lead', evidence:'Risk register with rated risks and treatment decisions',
+      how:['Rate each discovered gap for impact and likelihood against the agreed risk appetite, not on instinct.','Record a treatment decision for every rated risk: treat, tolerate, transfer or terminate.','Carry rated risks into the baseline decision so control selection is justified by risk, not habit.']},
     {id:'S2.13', title:'Build the domain gap register', accountable:'Security Architecture Lead', evidence:'Gap register (15 domains)',
       how:['For each domain, compare current-state assessment (S2.10) against the intended baseline control list.','Record explicit "no gap found" entries as well as gaps — silence is not evidence of adequacy.','Prioritise gaps using discovered asset criticality and any urgent-track referrals.']},
     {id:'S2.14', title:'Confirm Discover exit criteria', accountable:'Accountable executive', evidence:'Signed exit criteria record',
@@ -365,7 +376,7 @@ registerStage({
   accountable:'Chief Information Security Officer',
   lead:'Security Governance Lead',
   why:'Discovery tells you what exists; this stage decides what "good enough" means and gets it formally approved, so that every later implementation decision can be checked against an agreed baseline instead of individual opinion.',
-  inputs:['Gap register (Discover)','Draft requirement set','Regulatory obligations register (Govern)','Existing policy inventory (Govern)'],
+  inputs:['Gap register (Discover and assess)','Risk register with rated risks (Discover and assess)','Draft requirement set','Regulatory obligations register (Govern)','Existing policy inventory (Govern)'],
   standards:['Proposed standard: Minimum Baseline Control Standard','Proposed standard: Exception Management Standard'],
   externalRefs:['ISO/IEC 27001:2022 Annex A control catalogue','NIST SP 800-53 Rev. 5 control baselines'],
   greenfield:'Adopt the full approved control baseline from the outset as a design constraint — it is cheaper to build to the baseline than to retrofit it.',
@@ -428,7 +439,7 @@ registerStage({
   accountable:'Chief Information Security Officer',
   lead:'Security Architecture Lead',
   why:'An approved baseline is a set of outcomes, not a blueprint. This stage turns it into a concrete target architecture and operating model — including how threats against the design are found and mitigated before a single control is built — so Build implements against a design, not improvisation.',
-  inputs:['Approved requirement set and baseline (Baseline)','Current-state asset and data-flow inventory (Discover)','Open local-adoption decisions log (Baseline)'],
+  inputs:['Approved requirement set and baseline (Baseline)','Current-state asset and data-flow inventory (Discover and assess)','Open local-adoption decisions log (Baseline)'],
   standards:['Proposed standard: Reference Architecture Standard','Proposed standard: Threat Modelling Standard'],
   externalRefs:['NIST CSF 2.0 — Protect (PR) function','OWASP Application Security Verification Standard (ASVS)'],
   greenfield:'Design the target architecture directly — zones, identity paths and control placement can be set correctly from day one without migration constraints.',
@@ -1627,7 +1638,7 @@ GLOSSARY.push(
    ============================================================ */
 const STAGE_META = {
   S1:{short:'Govern',   slug:'govern',   purpose:'Name the accountable owner and delegated authority before any control work begins.'},
-  S2:{short:'Discover', slug:'discover', purpose:'Build the inventory of services, assets, data flows and gaps that later decisions rest on.'},
+  S2:{short:'Discover and assess', slug:'discover', purpose:'Inventory the estate, then assess and rate the risk that the baseline has to answer.'},
   S3:{short:'Baseline', slug:'baseline', purpose:'Decide what good enough means and record it as a signed control set.'},
   S4:{short:'Design',   slug:'design',   purpose:'Turn approved outcomes into an architecture, a threat model and named control owners.'},
   S5:{short:'Build',    slug:'build',    purpose:'Prove the pattern on one pilot, test the failure cases, then expand in waves.'},
@@ -1967,6 +1978,56 @@ DG['dg-ztna-rollout'] = {w:1120,h:300,title:'ZTNA rollout sequence',legend:['con
     {from:'tune',to:'p3',type:'loop',label:'retest',points:[[670,186],[535,186],[535,92]],labelAt:[590,178]},
     {from:'cut',to:'p3',type:'loop',label:'next app',points:[[1005,96],[1005,258],[535,258],[535,92]],labelAt:[760,251]}
   ]};
+DG['dg-sdlc'] = {w:1180,h:250,title:'Security activity across the software lifecycle',legend:['control','decision','ok'],
+  caption:'Security work belongs in every phase, but shifting left does not remove the release decision. Each phase produces evidence the next one can rely on.',
+  nodes:[
+    {id:'plan',type:'control',x:16,y:40,w:160,h:56,title:'Plan',sub:'Abuse cases, acceptance criteria'},
+    {id:'design',type:'control',x:196,y:40,w:160,h:56,title:'Design',sub:'Threat model, ADRs'},
+    {id:'build',type:'control',x:376,y:40,w:160,h:56,title:'Build',sub:'Secure coding, secret hygiene'},
+    {id:'test',type:'control',x:556,y:40,w:160,h:56,title:'Test',sub:'AuthZ tests, DAST'},
+    {id:'rel',type:'decision',x:736,y:34,w:180,h:68,title:'Release decision'},
+    {id:'ops',type:'ok',x:996,y:40,w:170,h:56,title:'Operate',sub:'Monitor and feed back'}
+  ],
+  edges:[
+    {from:'plan',to:'design'},{from:'design',to:'build'},{from:'build',to:'test'},{from:'test',to:'rel'},
+    {from:'rel',to:'ops',label:'pass'},
+    {from:'ops',to:'plan',type:'loop',label:'findings and vulnerabilities',points:[[1081,96],[1081,190],[96,190],[96,96]],labelAt:[590,183]}
+  ]};
+DG['dg-pipeline'] = {w:1180,h:270,title:'DevSecOps pipeline gates',legend:['control','decision','ok','risk'],
+  caption:'Each gate fails the build on a defined condition. Gates start in report-only and are enforced once false positives are tuned.',
+  nodes:[
+    {id:'commit',type:'control',x:16,y:40,w:150,h:56,title:'Pre-commit',sub:'Secret scan'},
+    {id:'pr',type:'control',x:186,y:40,w:160,h:56,title:'Pull request',sub:'SAST, SCA, IaC'},
+    {id:'bld',type:'control',x:366,y:40,w:160,h:56,title:'Build',sub:'Image scan, SBOM'},
+    {id:'sign',type:'control',x:546,y:40,w:150,h:56,title:'Sign',sub:'Keyless OIDC'},
+    {id:'adm',type:'decision',x:716,y:34,w:180,h:68,title:'Admission policy'},
+    {id:'run',type:'ok',x:976,y:40,w:190,h:56,title:'Runtime',sub:'Behavioural detection'},
+    {id:'fail',type:'risk',x:546,y:180,w:350,h:52,title:'Build fails: unsigned, privileged or critical finding'}
+  ],
+  edges:[
+    {from:'commit',to:'pr'},{from:'pr',to:'bld'},{from:'bld',to:'sign'},{from:'sign',to:'adm'},
+    {from:'adm',to:'run',label:'pass'},
+    {from:'adm',to:'fail',type:'loop',label:'rejected'}
+  ]};
+DG['dg-ir'] = {w:1120,h:330,title:'Incident response lifecycle',legend:['control','decision','owner','ok','data'],
+  caption:'Detection and triage can be operated by an MSSP, but containment is a named internal decision. Post-incident findings leave the incident and enter the owning stage.',
+  nodes:[
+    {id:'prep',type:'control',x:16,y:50,w:150,h:56,title:'Prepare',sub:'Playbooks, rehearsal'},
+    {id:'det',type:'control',x:186,y:50,w:150,h:56,title:'Detect',sub:'Alerts, feed health'},
+    {id:'tri',type:'control',x:356,y:50,w:150,h:56,title:'Triage',sub:'Severity and scope'},
+    {id:'dec',type:'decision',x:526,y:44,w:180,h:68,title:'Contain now?'},
+    {id:'auth',type:'owner',x:726,y:44,w:190,h:68,title:'Containment authority',sub:'Named, out of hours'},
+    {id:'erad',type:'control',x:726,y:150,w:190,h:56,title:'Eradicate',sub:'Root cause removed'},
+    {id:'rec',type:'ok',x:936,y:150,w:170,h:56,title:'Recover',sub:'Dependency-led'},
+    {id:'learn',type:'data',x:356,y:230,w:300,h:56,title:'Post-incident review',sub:'Findings routed to the owning stage'}
+  ],
+  edges:[
+    {from:'prep',to:'det'},{from:'det',to:'tri'},{from:'tri',to:'dec'},
+    {from:'dec',to:'auth',label:'yes'},
+    {from:'auth',to:'erad'},{from:'erad',to:'rec'},
+    {from:'rec',to:'learn',points:[[1021,206],[1021,258],[656,258]]},
+    {from:'learn',to:'prep',type:'loop',label:'improve',points:[[356,258],[91,258],[91,106]],labelAt:[200,251]}
+  ]};
 const SEQ_ZTNA = {w:1140,title:'ZTNA access sequence',
   caption:'Every session is brokered after identity and posture are evaluated. The private app is never reached directly by the user.',
   lanes:['User','Client Connector','Entra ID','ZPA Service Edge','App Connector','Private app'],
@@ -1984,11 +2045,18 @@ const SEQ_ZTNA = {w:1140,title:'ZTNA access sequence',
 /* ============================================================
    SHARED UI FRAGMENTS
    ============================================================ */
-function track(currentSlug){
-  return `<nav class="track" aria-label="Lifecycle">` + STAGES.map(s=>{
+function track(currentSlug, opts){
+  opts = opts || {};
+  const chev = `<nav class="track" aria-label="Lifecycle">` + STAGES.map(s=>{
     const cur = s.slug===currentSlug ? ' aria-current="step"' : '';
     return `<a href="#/stage/${s.slug}"${cur}>${esc(s.short)}</a>`;
   }).join('') + `</nav>`;
+  if(opts.bare) return chev;
+  return `<div class="lifecycle">
+    <div class="wrap-band">Govern is continuous: charter, risk appetite and exceptions are reviewed throughout</div>
+    ${chev}
+    <div class="loop-band"><span>Assure findings return to the stage that owns the fix</span></div>
+  </div>`;
 }
 function panelList(title, items, cls){
   return `<div class="panel"><h3>${esc(title)}</h3><ul class="${cls||''}">${items.map(i=>`<li>${esc(i)}</li>`).join('')}</ul></div>`;
@@ -2095,7 +2163,6 @@ function pageLifecycle(){
     <p class="lede">Seven stages in dependency order. Each stage produces what the next one needs, and assurance feeds findings back rather than absorbing them.</p>
     ${track(null)}
     <div class="band amber">Urgent remediation runs in parallel from day one</div>
-    <div class="band accent">Assurance findings return to the owning stage</div>
   </section>
   <section>
     <h2>Stages</h2>
@@ -2261,6 +2328,92 @@ function pageDisciplines(){
   </section>`;
 }
 
+const DISCIPLINE_EXTRA = {
+  appsec: () => `
+  <section>
+    <h2>Secure software development lifecycle</h2>
+    <p>Security work belongs in every phase. Shifting left brings feedback earlier; it does not remove the release decision.</p>
+    ${renderDiagram(DG['dg-sdlc'])}
+    ${tableOf(['Phase','Security activity','Evidence'],[
+      ['Plan','Abuse cases and security acceptance criteria written into the story','Story with acceptance criteria'],
+      ['Design','Threat model and an ADR for the authentication and authorisation boundary','Threat model, ADR'],
+      ['Build','Coding to the agreed ASVS level, secrets kept out of source','SAST and secret scan results'],
+      ['Test','Object-level authorisation tests, DAST, dependency review','Test report, SCA report'],
+      ['Release','Signed artefact, SBOM produced, change approved','Signature, SBOM, change record'],
+      ['Operate','Runtime monitoring and a vulnerability feedback loop','Alerts, patch record']
+    ])}
+    <div class="grid g2" style="margin-top:1rem">
+      ${panelList('Practice',[
+        'Threat model at design and on material change, not once at project start.',
+        'Set the ASVS level from data classification, not team preference.',
+        'Object-level authorisation is the application\'s job; no gateway substitutes for it.',
+        'Treat security acceptance criteria as part of done, not a separate backlog.'
+      ],'ck')}
+      ${panelList('Pitfalls',[
+        'Shifting left but quietly dropping the release gate.',
+        'Threat models written once and never revisited after the design changes.',
+        'Relying on a WAF to cover a missing authorisation check.',
+        'Findings raised with no owner, so they age in a queue.'
+      ],'wn')}
+    </div>
+  </section>
+  <section>
+    <h2>DevSecOps pipeline</h2>
+    <p>Each gate has a defined failure condition and produces an artefact the next stage can verify.</p>
+    ${renderDiagram(DG['dg-pipeline'])}
+    ${tableOf(['Gate','Check','Fails the build on'],[
+      ['Pre-commit','Secret scanning','Any detected credential'],
+      ['Pull request','SAST, SCA, IaC scanning','A new critical finding'],
+      ['Build','Image scan and SBOM generation','Critical unpatched vulnerability'],
+      ['Sign','Artefact signing, keyless via OIDC','An unsigned artefact'],
+      ['Deploy','Admission policy','Unsigned or privileged workload'],
+      ['Runtime','Behavioural detection','Anomalous process or egress']
+    ])}
+    <div class="grid g2" style="margin-top:1rem">
+      ${panelList('Practice',[
+        'Deploy identity is short-lived and OIDC-issued, never a stored credential.',
+        'Start gates in report-only, enforce once false positives are tuned.',
+        'Sign what you build and verify what you deploy.',
+        'A bypass is a change with an owner and an expiry, not a checkbox.'
+      ],'ck')}
+      ${panelList('Threat context',[
+        'Injection and broken access control remain the highest-yield application attacks.',
+        'Dependency and build-system compromise reaches production without touching your code.',
+        'Long-lived CI credentials are a standard lateral movement path.',
+        'Public exposure of an internal API is usually a configuration error, not an exploit.'
+      ],'wn')}
+    </div>
+  </section>`,
+  resilience: () => `
+  <section>
+    <h2>Incident response lifecycle</h2>
+    <p>Detection and triage can be operated by an MSSP. Containment is a named internal decision, and accountability does not transfer.</p>
+    ${renderDiagram(DG['dg-ir'])}
+    ${tableOf(['Phase','What good looks like','Evidence'],[
+      ['Prepare','Playbooks per incident type, containment authority named and rehearsed','Tabletop exercise record'],
+      ['Detect','Alerts tuned, and a missing feed raises its own alert','Alert and feed-health logs'],
+      ['Triage','Severity and scope agreed, incident formally declared','Incident record'],
+      ['Contain','Authority reachable in and out of hours, action approved','Containment approval'],
+      ['Eradicate','Root cause removed, not just the symptom','Change record'],
+      ['Recover','Dependency-led restore, service validated before reopening','Recovery test record'],
+      ['Learn','Findings routed to the stage that owns the fix','Post-incident review']
+    ])}
+    <div class="grid g2" style="margin-top:1rem">
+      ${panelList('Practice',[
+        'Name the containment authority before an incident, not during one.',
+        'Recover in dependency order: identity before the services that authenticate to it.',
+        'A backup job is not a recovery test; a validated restore is.',
+        'Route post-incident findings to the owning stage, not into assurance.'
+      ],'ck')}
+      ${panelList('Pitfalls',[
+        'Playbooks written but never rehearsed against a realistic scenario.',
+        'Assuming an MSSP service level transfers accountability for the outcome.',
+        'Containment decisions stalling out of hours because authority is unclear.',
+        'Recovery ordered by convenience, producing a restored but unusable service.'
+      ],'wn')}
+    </div>
+  </section>`
+};
 function pageDiscipline(id){
   const d = DISCIPLINES.find(x=>x.id===id);
   if(!d) return pageNotFound();
@@ -2278,6 +2431,7 @@ function pageDiscipline(id){
     <h2>Reference profile</h2>
     ${tableOf(['Element','Target'], d.referenceProfile.map(r=>[esc(r.k), esc(r.v)]))}
   </section>
+  ${DISCIPLINE_EXTRA[d.id] ? DISCIPLINE_EXTRA[d.id]() : ''}
   <section>
     <h2>Across the lifecycle</h2>
     ${tableOf(['Stage','Focus','Example tools'], d.stages.map((s,i)=>{
