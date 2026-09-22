@@ -2138,6 +2138,11 @@ DIAGRAMS['d-apply-ztna'] = {
     {from:'connector', to:'legacy', label:'outbound tunnel only\n(no inbound hole)'}
   ]
 };
+DIAGRAMS['d-apply-ztna-steps'] = buildFlowDiagram(
+  'How ZPA works, step by step',
+  'From authentication through to the response being returned — every step passes through identity and posture checks before the App Connector ever forwards a request.',
+  ['Authenticate via IdP (MFA + CA)','Request internal app','Client Connector intercepts','ZPA verifies identity & posture','ZPA selects App Connector','Connector forwards to server','Response returned via ZPA']
+);
 DIAGRAMS['d-apply-ztna-rollout'] = {
   title:'ZTNA implementation approach — phased, pilot then expand',
   caption:'SaaS apps go first (fastest, lowest risk), then legacy apps one at a time behind a connector, each proven on a small pilot group with a negative test before wider rollout; VPN for that app is switched off only once ZTNA is proven, not run alongside indefinitely.',
@@ -2193,43 +2198,63 @@ function pageApplication(){
   ]);
 
   html += qa(2, 'How would you implement ZTNA in a mixed SaaS and legacy server/application environment? Outline your proposed architecture, implementation approach, key benefits, potential challenges, and preferred technologies or vendors.', [
-    {h:'Architecture', diagram:'d-apply-ztna', html: bl([
-      'Replace flat-network VPN trust with a <strong>broker-based ZTNA model</strong> — illustrated here as a concrete reference stack, not just a concept.',
-      '<strong>User device</strong> — Zscaler Client Connector plus EDR provide the posture signal (managed, patched, healthy) before any access decision is made.',
-      '<strong>Identity provider (Entra ID)</strong> — authentication, MFA, group membership and Conditional Access is evaluated first; this is the single policy decision point for both SaaS and legacy paths.',
-      '<strong>SaaS apps</strong> branch directly off the identity provider via native SSO/OIDC — no broker hop needed for apps that already speak modern auth.',
-      '<strong>Zscaler ZPA Service Edge</strong> — the policy engine and broker that makes the per-application, per-session access decision for everything that isn\'t native SaaS.',
-      '<strong>ZPA App Connectors</strong> — lightweight software placed in the datacentre/cloud that open <strong>outbound-only</strong> tunnels back to the Service Edge; no inbound firewall rule is ever opened.',
-      '<strong>Legacy apps / servers</strong> — HR Portal, ERP, RDP, SMB file shares, internal APIs and similar systems reached only through the connector, never directly internet-exposed.',
+    {h:'Introduction', html: bl([
+      '<strong>Zscaler Private Access (ZPA)</strong> is the reference ZTNA solution I\'d propose to replace traditional VPN — instead of broad network-level access, it grants secure, identity-driven access to specific applications only.',
+      'Users connect to internal resources through Zscaler\'s cloud, eliminating exposed IPs and inbound firewall rules entirely.',
+      'Access is granted only when identity, device posture and policy conditions are all satisfied together — never on network location alone.'
+    ])},
+    {h:'Core components', diagram:'d-apply-ztna', html: bl([
+      '<strong>Zscaler Client Connector</strong> — a lightweight agent on user devices; identifies private application traffic, enforces device posture requirements, and routes authorised traffic through ZPA instead of the corporate network.',
+      '<strong>Identity provider (Microsoft Entra ID / Okta)</strong> — handles authentication, MFA, conditional access and group membership; ZPA relies on the identity token it issues to decide who the user is and what they can reach.',
+      '<strong>ZPA Public Service Edge</strong> — Zscaler\'s cloud-based policy engine; validates identity, evaluates device posture, applies Zero Trust rules and brokers the secure connection.',
+      '<strong>ZPA App Connectors</strong> — small virtual appliances deployed close to internal applications; establish <strong>outbound-only</strong> encrypted tunnels to Zscaler and forward authorised traffic. No inbound connection is ever required.',
+      '<strong>Internal applications</strong> — HR portals, ERP systems, SMB file shares, RDP/SSH servers and internal APIs — any private or legacy application, kept completely hidden from the internet.',
       `Important boundary: ZTNA replaces the <em>network</em> trust decision, not <em>application-level authorisation</em> — the app itself still has to check the caller is allowed to see the specific resource requested, the same principle as the <a href="#/checkpoint">firewall/WAF/API checkpoint</a> in the guide.`
     ])},
+    {h:'How it works — step by step', diagram:'d-apply-ztna-steps', html: `<ol style="font-size:14px;color:var(--ink-soft);padding-left:20px;margin:0;display:grid;gap:8px">
+      <li>The user authenticates through the identity provider using MFA and conditional access policies.</li>
+      <li>The user attempts to reach an internal application, e.g. <code class="id">hr-app.local</code>.</li>
+      <li>Zscaler Client Connector intercepts the request and sends it to the ZPA cloud.</li>
+      <li>ZPA verifies identity, device posture and policy requirements together.</li>
+      <li>ZPA selects the appropriate App Connector based on the application segment.</li>
+      <li>The App Connector forwards the request to the internal application server over its outbound-only tunnel.</li>
+      <li>The server's response is returned securely to the user through ZPA.</li>
+    </ol>`},
     {h:'Implementation approach', diagram:'d-apply-ztna-rollout', html: bl([
       'Phased, starting with the highest-confidence win: <strong>SaaS apps first</strong> — usually already support modern federated auth.',
       '<strong>Legacy apps next</strong>, one at a time, starting with the least business-critical system to validate the pattern before touching anything sensitive.',
       'Each app: deploy connector → define access policy → cut over a small pilot group → negative-test (unauthorised/non-compliant device correctly denied) → expand to full user base.',
       `VPN for that specific app is switched off once ZTNA is proven for it — never run both indefinitely, since that doubles the attack surface. Mirrors the <a href="#/stage/5">implement-pilot-expand pattern</a> in the guide.`
     ])},
+    {h:'End-to-end example flow', html: `<div style="display:grid;gap:10px">
+      <div class="box" style="background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:13px;color:var(--ink-soft)"><b style="display:block;font-size:11px;text-transform:uppercase;color:var(--ink-faint);margin-bottom:4px">Example 1 — HR manager reaches an internal web app</b>A remote HR manager signs into Microsoft 365 via Entra ID. After successful authentication, they click an internal HR application link. ZPA intercepts the request, evaluates identity and device posture, and routes traffic through the Service Edge to the correct App Connector. The App Connector forwards the request to the HR server, and the response is delivered securely back to the user.</div>
+      <div class="box" style="background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:13px;color:var(--ink-soft)"><b style="display:block;font-size:11px;text-transform:uppercase;color:var(--ink-faint);margin-bottom:4px">Example 2 — same manager reaches a legacy SMB file share</b>If the manager then accesses <code class="id">\\\\fileserver\\hr</code>, ZPA applies the same identity- and posture-based rules. The Client Connector routes the SMB traffic through ZPA, and the App Connector forwards it to the file server — without ever exposing the network itself.</div>
+    </div>`},
     {h:'Key benefits', html: bl([
-      'Eliminates lateral movement risk from flat VPN access — a compromised laptop reaches only the apps it was already authorised for.',
-      'One consistent access model across SaaS, cloud and on-prem legacy, instead of three different remote-access tools.',
-      'Continuous, contextual evaluation instead of a one-time login — a session can be revoked mid-flight if posture changes.',
-      'Centralised, per-app, per-identity audit trail, instead of inferring access from network flow logs.',
-      'Better hybrid/remote user experience — per-app access that works the same from anywhere, no full-tunnel VPN client.'
+      'Eliminates traditional VPN requirements and the lateral movement risk that comes with flat network access.',
+      'Prevents exposure of internal IPs and services — nothing is directly internet-reachable.',
+      'Enforces identity and device posture for every access attempt, continuously, not just at login.',
+      'Supports both SaaS and legacy applications through the same policy engine.',
+      'Outbound-only connector architecture reduces attack surface versus any inbound-facing gateway.',
+      'Centralised, per-app, per-identity audit trail, instead of inferring access from network flow logs.'
     ])},
     {h:'Potential challenges', html: bl([
-      '<strong>Non-HTTP legacy protocols</strong> — some apps need TCP/UDP-level tunnelling, not every ZTNA product handles this equally well.',
-      '<strong>No modern auth on the legacy app</strong> — systems predating SAML/OIDC need an auth wrapper or bridging pattern.',
+      '<strong>Application segmentation accuracy</strong> — internal applications need to be correctly and granularly segmented, or policy ends up broader than intended.',
+      '<strong>Non-standard legacy protocols</strong> — some older apps need TCP/UDP-level tunnelling or special handling; not every ZTNA product handles this equally well.',
+      '<strong>User adaptation</strong> — staff shift from network-based access ("VPN = everything") to application-based access, which is a change-management effort as much as a technical one.',
       '<strong>Device posture gaps on BYOD</strong> — unmanaged personal devices can\'t always provide the compliance signal, forcing an explicit risk decision.',
-      '<strong>Change management</strong> — staff used to "VPN = access everything" need to understand app-by-app access.',
-      '<strong>Connector sprawl and latency</strong> — many small on-prem sites each need a connector, plus an extra broker hop for distributed users.',
+      '<strong>Connector placement and sprawl</strong> — every internal site/segment needs a connector, which adds operational overhead at scale.',
       'ZTNA reduces network exposure but doesn\'t remove the need for the application\'s own authorisation logic — that remains separate, ongoing work.'
     ])},
-    {h:'Preferred technologies / vendors', html: bl([
-      'Vendor-neutral requirement first, tooling second — these are illustrative shortlist examples, not a final recommendation.',
-      '<strong>Zscaler Private Access</strong>, <strong>Cloudflare Access</strong>, <strong>Microsoft Entra Private Access</strong> (strong fit if already on Entra ID), or <strong>Palo Alto Prisma Access</strong> as the broker.',
-      'Paired with the existing identity provider as the policy decision point, and a device-compliance source (e.g. Intune) as the posture signal.',
-      `Same principle set out in more depth in the guide's <a href="#/discipline/network">Network & perimeter security discipline</a> and <a href="#/domain/NET">NET baseline domain</a>, with a fuller <a href="#/tools">tool catalogue</a> alongside it.`
-    ])}
+    {h:'Recommended technology stack', html: `<div class="scroll-x"><table><tbody>
+      <tr><td style="font-weight:600;white-space:nowrap">ZTNA</td><td>Zscaler Private Access (ZPA)</td></tr>
+      <tr><td style="font-weight:600;white-space:nowrap">Secure web gateway</td><td>Zscaler Internet Access (ZIA)</td></tr>
+      <tr><td style="font-weight:600;white-space:nowrap">Identity provider</td><td>Microsoft Entra ID</td></tr>
+      <tr><td style="font-weight:600;white-space:nowrap">Endpoint detection & response</td><td>Microsoft Defender for Endpoint</td></tr>
+      <tr><td style="font-weight:600;white-space:nowrap">Data loss prevention</td><td>Microsoft Defender DLP</td></tr>
+      <tr><td style="font-weight:600;white-space:nowrap">SIEM</td><td>Microsoft Sentinel</td></tr>
+    </tbody></table></div>
+    <p style="font-size:12.5px;color:var(--ink-faint);margin:10px 0 0">Vendor-neutral requirement first, tooling second — this is an illustrative shortlist, not a final recommendation. The same default-deny-plus-ZTNA-over-flat-VPN principle is set out in more depth in the guide's <a href="#/discipline/network">Network & perimeter security discipline</a> and <a href="#/domain/NET">NET baseline domain</a>, with a fuller <a href="#/tools">tool catalogue</a> alongside it.</p>`}
   ]);
 
   html += `<div class="card" style="text-align:center;background:var(--surface-2)">
