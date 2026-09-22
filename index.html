@@ -2046,6 +2046,7 @@ function renderRail(){
     <a class="rail-link" href="#/baselines"><span>Baselines</span></a>
     <a class="rail-link" href="#/checkpoint"><span>FW/WAF/API checkpoint</span></a>
     <a class="rail-link" href="#/worked-service"><span>Worked service</span></a>
+    <a class="rail-link" href="#/example"><span>Example: ClaimsPortal</span></a>
     <a class="rail-link" href="#/tools"><span>Tools</span></a>
     <a class="rail-link" href="#/records"><span>Records</span></a>
   </div>
@@ -2082,7 +2083,14 @@ function pageOverview(){
       <div style="font-size:12px;color:var(--ink-faint)">${stageActionCount(s.id)} steps · ${s.reqs.length} requirements</div>
     </a>`;
   });
-  html += `</div>`;
+  html += `</div>
+  <div class="card" style="margin-top:20px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">
+    <div>
+      <h3 style="margin:0 0 4px;font-size:15px">See it driven end to end</h3>
+      <p style="margin:0;font-size:13px;color:var(--ink-soft)">One external web app, genuinely mixing on-premises, cloud and SaaS, walked through all seven stages.</p>
+    </div>
+    <a class="pillbtn active" href="#/example" style="white-space:nowrap">Open the ClaimsPortal example →</a>
+  </div>`;
   html += footer();
   return html;
 }
@@ -2469,6 +2477,7 @@ function pageWorkedService(){
       </div>
     </div>`;
   });
+  html += `<p style="font-size:13px;color:var(--ink-soft);margin-top:14px">Want a concrete, named example instead of the abstract CUSTOMER_A/CUSTOMER_B version? See <a href="#/example">the ClaimsPortal end-to-end example</a>.</p>`;
   html += footer();
   return html;
 }
@@ -2537,6 +2546,91 @@ function pageSearch(q){
     ${results.slice(0,80).map(r=>`<tr><td>${esc(r.type)}</td><td><a href="${r.href}"><code class="id">${esc(r.id)}</code></a></td><td><a href="${r.href}">${esc(r.label)}</a></td></tr>`).join('') || '<tr><td colspan="3">No matches.</td></tr>'}
   </tbody></table></div>
   <p style="font-size:12px;color:var(--ink-faint);margin-top:10px">${results.length} match(es).</p>` + footer();
+  return html;
+}
+
+/* ---------------------------------------------------------------------
+   1F. END-TO-END WORKED EXAMPLE: ClaimsPortal (one external web app,
+   genuinely hybrid on-prem/cloud/SaaS) driven through all seven stages.
+   ------------------------------------------------------------------- */
+const CLAIMSPORTAL = [
+  {stage:'S1', title:'Establish authority, scope and ownership', actions:['S1.01','S1.02','S1.03','S1.07'],
+    body:'The CISO is named accountable executive for ClaimsPortal end to end. The scope statement lists the web frontend, API, on-prem processing engine, SQL Server database, SaaS case-management system and the Entra External ID tenant — physical/OT/IoT stay explicitly out per decision D02. Domain delegates are named for IAM, NET/EDGE, DATA, DEV and REC — the domains that actually apply to this app. The provider boundary statement records that the SaaS case-management vendor operates case storage, but the CISO remains accountable per decision D06 — written down now, not assumed later.',
+    artefact:'Provider boundary statement: "SaaS Case Co. operates case storage; CISO remains accountable for ClaimsPortal customer data."'},
+  {stage:'S2', title:'Discover services, assets, data and gaps', actions:['S2.06','S2.07','S2.10','S2.11'],
+    body:'Discovery traces the real flow: customer → Front Door → App Service (portal) → API Management → Service Bus queue → on-prem processing engine/SQL Server → independent write into the SaaS case system → reconciled status back to the portal. The identity inventory confirms Entra External ID (customers) is structurally separate from the workforce Entra ID tenant used by claims-handling staff. The current-state assessment turns up a gap immediately: SQL Server sits on a flat network segment reachable from the general corporate LAN. Because this holds Confidential-classified claims data, it is referred straight into the urgent-protection track rather than waiting for the full baseline rollout.',
+    artefact:'Gap register entry: "NET — SQL Server reachable from general LAN, no segmentation. Classification: Confidential. Referred to urgent track."'},
+  {stage:'S3', title:'Approve requirements and the minimum baseline', actions:['S3.05','S3.06','S3.11'],
+    body:'The applicable baseline controls are pulled in: IAM-01/02/06 (customer identity isolated from staff identity, MFA/JIT for staff), EDGE-01/02 (WAF plus origin lock on Front Door), API-01..04 (API inventory, authentication, rate limiting, object/function-level authorisation), MID-01..04 (Service Bus authenticated, encrypted, reconciled end to end), DATA-02/03/04 (encryption at rest/in transit, secrets in Key Vault), NET-01/02 (zoning and default-deny). The flat-network SQL Server gap from Stage 2 is given a disposition of remediate now — not an exception — since the data classification does not support accepting that risk even temporarily.',
+    artefact:'Gap disposition log: "NET flat-network gap — disposition: remediate before go-live. Owner: Network architect. No exception requested."'},
+  {stage:'S4', title:'Design the target architecture and operating model', actions:['S4.04','S4.05','S4.06'],
+    body:'The edge chain is locked in per decision D04: Front Door → WAF → API Management → App Service, with the application still performing its own per-claim authorisation — the WAF is never treated as an authorisation boundary. The threat model\'s primary finding is a customer manipulating a claim ID to read another customer\'s claim; the mitigation validates the per-tenant claim scope both at API Management and again inside the on-prem processing engine. Per decision D05, the customer identity path (Entra External ID) is architecturally separate from the staff identity path (Entra ID with PIM for claims-handler elevation). The SQL Server is designed to sit behind a dedicated management-network boundary, reachable only from the processing engine and patch/backup jobs.',
+    artefact:'Threat model finding: "Spoofing — Customer B requests Customer A\'s claim by manipulated ID. Mitigation: per-tenant scope check at API Management AND at the on-prem engine. Residual risk: low."'},
+  {stage:'S5', title:'Implement, pilot, test and expand', actions:['S5.04','S5.05','S5.09'],
+    body:'CI/CD gates are wired for the portal and API codebases: secret scan → SAST/SCA → IaC scan (Terraform for the Azure landing zone) → image scan → SBOM → Cosign signing → OIDC deploy identity into Azure, with no static deploy credentials anywhere in the pipeline. The negative test is run against the exact threat-model finding: authenticated as Customer B, request Customer A\'s claim by ID — result: 403 Forbidden, confirmed at both API Management and the on-prem engine. The failure test kills the Service Bus connection mid-flow — messages queue and redeliver rather than silently drop. The recovery test restores the SQL Server database into an isolated environment and confirms a real claim record is intact and queryable — not just that the backup job completed. Only once the flat-network fix is implemented and tested is the Stage 2 urgent-track item closed.',
+    artefact:'Negative test record: "Actor: Customer B token. Target: Customer A claim ID (manipulated). Expected: 403. Actual: 403. Result: PASS."'},
+  {stage:'S6', title:'Operate, respond and recover', actions:['S6.03','S6.08','S6.11'],
+    body:'Monitoring coverage is confirmed for every implemented control, including a missing-feed alert specifically on the on-prem SQL Server\'s audit log forwarder — the most likely silent failure point in a hybrid setup. The hybrid SOC escalation model means a managed provider can detect and triage a cloud-side alert, but only the named containment authority can approve isolating the on-prem segment. A tabletop exercise is run against the scenario "Customer B\'s session token is compromised." The dependency-led recovery order is documented as Entra External ID → API Management → on-prem processing/DB → SaaS case reconciliation, since recovering the database before identity would produce an unreachable system.',
+    artefact:'Tabletop exercise record: "Scenario: compromised customer session token. Finding: containment authority confirmed within SLA; playbook updated to add automatic session revocation step."'},
+  {stage:'S7', title:'Assure effectiveness and improve', actions:['S7.03','S7.05','S7.09'],
+    body:'Assurance independently re-runs the cross-customer negative test on a sampling basis the following quarter rather than trusting the Stage 5 record indefinitely. It checks the flat-network remediation is still in place, since configuration drift is the usual way a fixed gap quietly reopens. Any new finding is routed back to the stage that owns the fix — a repeat of the flat-network issue would go back to Stage 5/6 as an operational finding, not be patched informally inside the assurance review itself.',
+    artefact:'Assurance sample report: "2026-Q2 — cross-customer isolation re-tested: still blocks (PASS). Network segmentation re-checked: still in place (PASS). No loop-back required this cycle."'}
+];
+DIAGRAMS['d-claimsportal'] = {
+  title:'ClaimsPortal — one external web app, genuinely hybrid',
+  caption:'A customer submits a claim through the cloud-hosted portal; it passes through the edge chain and queue into an on-premises processing engine and database, while independently reaching a SaaS case-management system, with status reconciled back to the customer. Staff identity (workforce) is architecturally separate from customer identity throughout.',
+  zones:[
+    {x:0,y:0,w:1.4,h:3.2,label:'Internet'},
+    {x:1.5,y:0,w:1.9,h:3.2,label:'Cloud (Azure)'},
+    {x:3.5,y:0,w:1.4,h:3.2,label:'On-premises'},
+    {x:5.0,y:0,w:1.4,h:3.2,label:'SaaS'}
+  ],
+  nodes:[
+    {id:'cust', kind:'identity', x:0, y:0.2, label:'Customer\n(Entra External ID)'},
+    {id:'staff', kind:'identity', x:0, y:1.6, label:'Claims staff\n(Entra ID + PIM)'},
+    {id:'fd', kind:'control', x:1.5, y:0.2, label:'Front Door + WAF'},
+    {id:'apim', kind:'control', x:1.5, y:1.4, label:'API Management'},
+    {id:'app', kind:'control', x:3.0, y:0.2, w:0.9, label:'App Service\n(portal)'},
+    {id:'sb', kind:'data', x:3.5, y:1.4, label:'Service Bus queue'},
+    {id:'onprem', kind:'control', x:5.0, y:1.4, w:0, label:''},
+    {id:'sql', kind:'data', x:3.5, y:2.6, label:'On-prem processing\n+ SQL Server'},
+    {id:'saas', kind:'data', x:5.0, y:0.2, label:'SaaS case management'},
+    {id:'recon', kind:'accepted', x:5.0, y:2.6, label:'Reconciled status'},
+    {id:'denied', kind:'denied', x:0, y:2.8, label:'Customer B → Customer A claim: denied'}
+  ],
+  edges:[
+    {from:'cust', to:'fd', label:'submits claim'}, {from:'fd', to:'app'}, {from:'app', to:'apim'},
+    {from:'apim', to:'sb'}, {from:'sb', to:'sql'}, {from:'apim', to:'saas', label:'independent case record'},
+    {from:'sql', to:'recon'}, {from:'saas', to:'recon', label:'status sync'},
+    {from:'staff', to:'apim', label:'triage (PIM-elevated)'},
+    {from:'denied', to:'apim', label:'blocked', kind:'urgent', back:true}
+  ]
+};
+function pageClaimsPortal(){
+  let html = `<div class="crumbs"><a href="#/overview">Overview</a> / Worked example — ClaimsPortal</div>
+  <h1>End-to-end example: ClaimsPortal</h1>
+  <p class="lede">One external, customer-facing web app, genuinely mixing on-premises, cloud and SaaS, driven through all seven stages using this guide's own domain codes, requirement IDs and disciplines. Synthetic example — nothing described here has actually been executed.</p>
+  ${renderDiagram('d-claimsportal')}`;
+  CLAIMSPORTAL.forEach((c,i)=>{
+    const stage = STAGES.find(s=>s.id===c.stage);
+    const firstOpen = i===0 ? ' open' : '';
+    html += `<div class="step${firstOpen}" style="margin-bottom:10px">
+      <button class="step-head" onclick="this.parentElement.classList.toggle('open')">
+        <span class="step-num">${i+1}</span>
+        <span class="step-title">${stage?`Stage ${stage.num} — ${esc(c.title)}`:esc(c.title)}</span>
+        <span class="step-chev">›</span>
+      </button>
+      <div class="step-body">
+        <p style="font-size:13.5px;color:var(--ink-soft)">${esc(c.body)}</p>
+        <div class="step-sub" style="grid-template-columns:1fr">
+          <div class="box"><b>Example artefact (synthetic, not executed)</b>${esc(c.artefact)}</div>
+        </div>
+        <div class="chiprow">${c.actions.map(a=>`<a class="badge" href="#/stage/${c.stage.replace('S','')}#step-${a}">${a}</a>`).join(' ')}${stage?` <a class="badge" href="#/stage/${stage.num}">Full stage detail →</a>`:''}</div>
+      </div>
+    </div>`;
+  });
+  html += `<p style="font-size:12px;color:var(--ink-faint);margin-top:10px">See also the <a href="#/worked-service">generic worked service (CUSTOMER_A/REQUEST_A)</a> for the abstract version of this same pattern.</p>`;
+  html += footer();
   return html;
 }
 
@@ -2620,6 +2714,7 @@ function render(){
   else if(parts[0]==='capabilities'){ html = pageCapabilities(); }
   else if(parts[0]==='rollout'){ html = pageRollout(); }
   else if(parts[0]==='worked-service'){ html = pageWorkedService(); }
+  else if(parts[0]==='example'){ html = pageClaimsPortal(); }
   else if(parts[0]==='checkpoint'){ html = pageCheckpoint(); }
   else if(parts[0]==='search'){ html = pageSearch(decodeURIComponent(parts[1]||'')); }
   else { html = pageOverview(); }
