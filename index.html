@@ -2066,53 +2066,154 @@ function doSearch(q){
   location.hash = '#/search/' + encodeURIComponent(q);
 }
 
-function qa(q, blocks){
-  return `<div class="card" style="margin-bottom:20px">
-    <div class="pill cobalt" style="margin-bottom:10px">Question</div>
-    <h2 style="margin:0 0 14px;font-size:18px">${esc(q)}</h2>
-    ${blocks.map(b=>`<h3 style="font-size:13px;text-transform:uppercase;letter-spacing:.03em;color:var(--ink-faint);margin:18px 0 6px">${esc(b.h)}</h3>${b.html}`).join('')}
+function qa(qnum, q, blocks){
+  return `<div class="card" style="margin-bottom:24px">
+    <div class="pill cobalt" style="margin-bottom:10px">Question ${qnum}</div>
+    <h2 style="margin:0 0 16px;font-size:18px;line-height:1.35">${esc(q)}</h2>
+    ${blocks.map(b=>`<div style="margin-bottom:20px">
+      <h3 style="font-size:12.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--cobalt);margin:0 0 10px;padding-bottom:6px;border-bottom:1px solid var(--line)">${esc(b.h)}</h3>
+      ${b.diagram ? renderDiagram(b.diagram) : ''}
+      ${b.html}
+    </div>`).join('')}
   </div>`;
 }
+function bl(items){
+  return `<ul style="font-size:14px;color:var(--ink-soft);padding-left:20px;margin:0;display:grid;gap:8px">${items.map(i=>`<li>${i}</li>`).join('')}</ul>`;
+}
+DIAGRAMS['d-apply-roadmap'] = {
+  title:'Roadmap approach — dependency-led, not calendar-led',
+  caption:'Seven stages in dependency order, each producing what the next stage needs; assurance loops back to whichever stage actually owns a finding, and urgent protection runs in parallel from day one rather than waiting its turn.',
+  nodes:[
+    {id:'a1', kind:'owner', x:0, y:0, label:'1. Authority\n& scope'},
+    {id:'a2', kind:'control', x:1.15, y:0, label:'2. Discover\nassets & gaps'},
+    {id:'a3', kind:'control', x:2.3, y:0, label:'3. Approve\nbaseline'},
+    {id:'a4', kind:'control', x:3.45, y:0, label:'4. Design\narchitecture'},
+    {id:'a5', kind:'control', x:4.6, y:0, label:'5. Implement\n& pilot'},
+    {id:'a6', kind:'control', x:5.75, y:0, label:'6. Operate\n& respond'},
+    {id:'a7', kind:'accepted', x:6.9, y:0, label:'7. Assure\n& improve'},
+    {id:'urgent', kind:'urgent', x:2.3, y:1.3, w:3.4, label:'Urgent protection — fixed in parallel from day one, not queued behind the sequence'}
+  ],
+  edges:[
+    {from:'a1', to:'a2'},{from:'a2', to:'a3'},{from:'a3', to:'a4'},{from:'a4', to:'a5'},{from:'a5', to:'a6'},{from:'a6', to:'a7'},
+    {from:'a7', to:'a3', label:'loop back to owning stage', back:true, kind:'urgent'},
+    {from:'urgent', to:'a5', kind:'urgent'}
+  ]
+};
+DIAGRAMS['d-apply-ztna'] = {
+  title:'ZTNA architecture for a mixed SaaS + legacy environment',
+  caption:'A single identity-aware policy engine brokers every access decision. SaaS apps integrate natively; legacy on-prem apps sit behind an outbound-only connector so no inbound firewall hole is ever opened.',
+  zones:[
+    {x:0,y:0,w:1.5,h:2.6,label:'User / device'},
+    {x:1.6,y:0,w:1.7,h:2.6,label:'Policy engine'},
+    {x:3.4,y:0,w:1.6,h:1.1,label:'SaaS'},
+    {x:3.4,y:1.4,w:1.6,h:1.2,label:'On-premises'}
+  ],
+  nodes:[
+    {id:'user', kind:'identity', x:0, y:0.7, label:'User + device\n(posture checked)'},
+    {id:'idp', kind:'owner', x:1.6, y:0.1, label:'Identity provider\n(policy decision)'},
+    {id:'broker', kind:'control', x:1.6, y:1.4, label:'ZTNA broker\n(per-app, per-session)'},
+    {id:'saas', kind:'data', x:3.4, y:0.15, label:'SaaS apps\n(native SSO/OIDC)'},
+    {id:'conn', kind:'control', x:3.4, y:1.5, label:'Outbound-only\nconnector'},
+    {id:'legacy', kind:'data', x:3.4, y:2.5, w:0, label:''},
+    {id:'legacyapp', kind:'denied', x:3.4, y:2.05, label:'Legacy app\n(no inbound hole)'}
+  ],
+  edges:[
+    {from:'user', to:'idp', label:'authenticate'},{from:'idp', to:'broker'},
+    {from:'broker', to:'saas', label:'per-app policy'},
+    {from:'broker', to:'conn', label:'per-app policy'},
+    {from:'conn', to:'legacyapp', label:'outbound tunnel'}
+  ]
+};
+DIAGRAMS['d-apply-ztna-rollout'] = {
+  title:'ZTNA implementation approach — phased, pilot then expand',
+  caption:'SaaS apps go first (fastest, lowest risk), then legacy apps one at a time behind a connector, each proven on a small pilot group with a negative test before wider rollout; VPN for that app is switched off only once ZTNA is proven, not run alongside indefinitely.',
+  nodes:[
+    {id:'p1', kind:'owner', x:0, y:0, label:'1. Pilot\nSaaS app'},
+    {id:'p2', kind:'accepted', x:1.3, y:0, label:'2. Expand\nSaaS estate'},
+    {id:'p3', kind:'control', x:2.6, y:0, label:'3. Connector on\nlow-risk legacy app'},
+    {id:'p4', kind:'decision', x:3.9, y:0, label:'4. Negative test:\nunauthorised denied?'},
+    {id:'p5', kind:'accepted', x:5.2, y:0, label:'5. Cut over\n& retire that app\'s VPN'},
+    {id:'repeat', kind:'urgent', x:2.6, y:1.3, w:2.6, label:'Repeat step 3-5 per legacy app'}
+  ],
+  edges:[
+    {from:'p1', to:'p2'},{from:'p2', to:'p3'},{from:'p3', to:'p4'},
+    {from:'p4', to:'p5', label:'yes'},
+    {from:'p4', to:'p3', label:'no: fix policy', back:true, kind:'urgent'},
+    {from:'p5', to:'repeat'}
+  ]
+};
 function pageApplication(){
   let html = `<div class="card" style="margin-bottom:20px;background:var(--cobalt-soft);border-color:transparent">
     <div class="pill cobalt">Application response</div>
     <h1 style="margin:10px 0 4px">Solutions Architect — Technology and Cybersecurity</h1>
-    <p class="lede" style="margin-bottom:0">Responses to the ELMO screening questions for the role at Cardinal. Each answer references a working example — the interactive framework guide that follows on this site was built to demonstrate the approach described below, not just assert it.</p>
+    <p class="lede" style="margin-bottom:0">Responses to the ELMO screening questions for the role at Cardinal. Each answer references a working example — the interactive framework guide that follows on this site was built to demonstrate the approach below, not just assert it.</p>
   </div>`;
 
-  html += qa('How would you build a technology and cybersecurity roadmap? Explain your approach, priorities, and the standards or frameworks you would use to guide it.', [
-    {h:'Approach', html:`<p style="font-size:14px;color:var(--ink-soft)">I treat a roadmap as <strong>dependency-led, not calendar-led</strong> — each stage has to produce what the next one needs, so I sequence work in the order dependencies actually require rather than a fixed quarterly plan drawn up in advance. In practice that means seven stages: (1) establish accountability and scope before anything technical starts, (2) discover the real estate — services, assets, data flows and gaps, not the CMDB's opinion of it, (3) get the minimum baseline formally approved so "good enough" is a decision, not an assumption, (4) design the target architecture and run threat modelling against it, (5) implement behind a pilot with a repair loop before wider rollout, (6) operate, monitor and rehearse response, and (7) run an assurance loop that independently checks evidence and routes findings back to whichever stage actually owns the fix. Critically, any urgent, already-known exposure gets fixed in parallel from day one — it doesn't wait for the roadmap to reach it in sequence.</p>`},
-    {h:'Priorities', html:`<ul style="font-size:14px;color:var(--ink-soft);padding-left:20px;margin:0">
-      <li>Fix known, actively-exploited exposure immediately, in parallel with the rest of the roadmap — never queue a live risk behind a planning cycle.</li>
-      <li>Build shared foundations first (identity, central logging, network zoning) — every later control depends on these, so sequencing them late means rework.</li>
-      <li>Protect the delivery pipeline early (secret scanning, SCA, signed artefacts) so everything built afterwards ships securely by default instead of needing retrofits.</li>
-      <li>Prioritise by residual risk and regulatory obligation, not by which control is easiest to implement.</li>
-      <li>Prove the pattern on one pilot service before expanding — a pattern that only works on paper isn't a pattern yet.</li>
-    </ul>`},
-    {h:'Standards and frameworks', html:`<p style="font-size:14px;color:var(--ink-soft)">I don't pick one framework and force everything into it — I use <strong>NIST CSF 2.0</strong> for outcome-level structure and board-level reporting, <strong>ISO/IEC 27001</strong> for the management-system backbone (useful if certification is ever in scope), and <strong>CIS Controls v8</strong> for concrete, implementable safeguards that map cleanly onto day-to-day engineering work. Where the environment demands it — cardholder data, customer software supply chain, a SOC 2 report a customer is asking for — I bring in PCI DSS, OWASP ASVS/SSDF, or SOC 2 Trust Services Criteria for that specific slice, rather than running five frameworks in parallel everywhere. The important discipline is cross-mapping them to one internal baseline early, so a control only has to be implemented once even though it might satisfy several frameworks' language for it.</p>
-    <p style="font-size:14px;color:var(--ink-soft)">As a worked demonstration of exactly this approach, I built <a href="#/overview">an interactive build guide</a> covering all seven stages, 15 baseline domains (84 controls), 10 cross-cutting disciplines, and a <a href="#/frameworks">crosswalk across NIST CSF 2.0, ISO 27001, NIST 800-53, CIS v8, SOC 2, ASVS, SSDF, PCI DSS and Essential Eight</a> — it's the rest of this page.</p>`}
+  html += qa(1, 'How would you build a technology and cybersecurity roadmap? Explain your approach, priorities, and the standards or frameworks you would use to guide it.', [
+    {h:'Approach', diagram:'d-apply-roadmap', html: bl([
+      '<strong>Dependency-led, not calendar-led</strong> — each stage has to produce what the next one needs, so work is sequenced by dependency, not a fixed quarterly plan.',
+      '<strong>1. Authority & scope</strong> — name an accountable executive and agree scope before any technical work starts.',
+      '<strong>2. Discover</strong> — map the real estate: services, assets, data flows and gaps, not the CMDB\'s opinion of it.',
+      '<strong>3. Approve baseline</strong> — get the minimum control set formally signed off, so "good enough" is a decision, not an assumption.',
+      '<strong>4. Design architecture</strong> — design the target state and run threat modelling against it before building.',
+      '<strong>5. Implement & pilot</strong> — build behind a pilot with a repair loop, then expand in waves.',
+      '<strong>6. Operate & respond</strong> — monitor, alert, and rehearse incident response, not just document it.',
+      '<strong>7. Assure & improve</strong> — independently re-check evidence and loop findings back to whichever stage owns the fix.',
+      '<strong>Urgent protection runs in parallel from day one</strong> — a known, live exposure is never queued behind the planning sequence.'
+    ])},
+    {h:'Priorities', html: bl([
+      'Fix known, actively-exploited exposure immediately, in parallel with the rest of the roadmap.',
+      'Build shared foundations first — identity, central logging, network zoning — since every later control depends on these.',
+      'Protect the delivery pipeline early (secret scanning, SCA, signed artefacts) so everything built afterwards ships securely by default.',
+      'Prioritise by residual risk and regulatory obligation, not by which control is easiest to implement.',
+      'Prove the pattern on one pilot service before expanding — a pattern that only works on paper isn\'t a pattern yet.'
+    ])},
+    {h:'Standards and frameworks', html: bl([
+      '<strong>NIST CSF 2.0</strong> — outcome-level structure and board-level reporting.',
+      '<strong>ISO/IEC 27001</strong> — management-system backbone, useful if certification is ever in scope.',
+      '<strong>CIS Controls v8</strong> — concrete, implementable safeguards that map cleanly onto day-to-day engineering work.',
+      '<strong>PCI DSS / OWASP ASVS & SSDF / SOC 2</strong> — brought in only for the specific slice that needs them (cardholder data, software supply chain, a customer-requested SOC 2 report) rather than run everywhere.',
+      'Cross-map frameworks to one internal baseline early, so a control is implemented once even if it satisfies several frameworks\' language for it.',
+      `Demonstrated as a working example: <a href="#/overview">an interactive build guide</a> covering all seven stages, 15 baseline domains (84 controls), 10 disciplines, and a <a href="#/frameworks">crosswalk across NIST CSF 2.0, ISO 27001, NIST 800-53, CIS v8, SOC 2, ASVS, SSDF, PCI DSS and Essential Eight</a> — it's the rest of this site.`
+    ])}
   ]);
 
-  html += qa('How would you implement ZTNA in a mixed SaaS and legacy server/application environment? Outline your proposed architecture, implementation approach, key benefits, potential challenges, and preferred technologies or vendors.', [
-    {h:'Architecture', html:`<p style="font-size:14px;color:var(--ink-soft)">I'd replace flat-network VPN trust with a <strong>broker-based ZTNA model</strong>: an identity-aware policy engine sits in front of every application, and access is granted per-application, per-session, based on identity, device posture and context — never based on which network segment the user happens to be on. SaaS applications integrate natively through the existing identity provider (SSO/OIDC/SAML plus conditional access). Legacy on-premises applications — including ones with no modern auth support — sit behind a lightweight connector that opens an <strong>outbound-only</strong> tunnel to the ZTNA broker, so no inbound firewall holes are needed and the app is never directly internet-reachable. The identity provider is the policy decision point; a device-compliance signal (managed vs unmanaged, patch state) feeds into every access decision alongside identity.</p>
-    <p style="font-size:14px;color:var(--ink-soft)">One thing I'm careful to keep explicit: ZTNA replaces the <em>network</em> trust boundary, not <em>application-level authorisation</em> — the app still has to check the caller is allowed to see the specific resource requested. This is the same principle behind the <a href="#/domain/EDGE">edge/WAF checkpoint</a> in the framework guide: no perimeter control substitutes for the application doing its own authorisation.</p>`},
-    {h:'Implementation approach', html:`<p style="font-size:14px;color:var(--ink-soft)">Phased, starting with the easiest, highest-confidence win: SaaS applications first, since they usually already support modern federated auth — this proves the policy engine and user experience with minimal risk. Legacy on-prem applications follow next, app by app, starting with the connector on the least business-critical system so the pattern is validated before touching anything sensitive. Each app goes through a short pilot: connector deployed, access policy defined, a small user group cut over, negative-tested (an unauthorised or non-compliant device correctly denied), and only then expanded to the full user base. VPN access for that specific app is switched off once ZTNA is proven for it — I don't run both indefinitely, since that just doubles the attack surface. This mirrors the <a href="#/stage/5">implement-pilot-expand pattern</a> in the framework guide.</p>`},
-    {h:'Key benefits', html:`<ul style="font-size:14px;color:var(--ink-soft);padding-left:20px;margin:0">
-      <li>Eliminates lateral movement risk from flat VPN access — a compromised laptop no longer reaches the whole network, only the specific apps it was already authorised for.</li>
-      <li>Consistent access model across SaaS, cloud and on-prem legacy — the same policy engine, not three different remote-access tools.</li>
-      <li>Continuous, contextual evaluation instead of a one-time login — a session can be revoked mid-flight if device posture changes.</li>
-      <li>Much better audit trail: every access to every app is logged centrally by app and identity, not inferred from network flow logs.</li>
-      <li>Better user experience for hybrid/remote staff — no full-tunnel VPN client, per-app access that "just works" from anywhere.</li>
-    </ul>`},
-    {h:'Potential challenges', html:`<ul style="font-size:14px;color:var(--ink-soft);padding-left:20px;margin:0">
-      <li><strong>Non-HTTP legacy protocols</strong> — some older apps don't speak HTTP/HTTPS cleanly and need TCP/UDP-level app tunnelling rather than a web-only reverse proxy; not every ZTNA product handles this equally well.</li>
-      <li><strong>No modern auth on the legacy app itself</strong> — some systems predate SAML/OIDC entirely and need an auth wrapper or a bridging identity pattern rather than native integration.</li>
-      <li><strong>Device posture gaps on BYOD</strong> — unmanaged personal devices can't always provide the compliance signal the policy engine wants, which forces an explicit risk decision rather than a technical default.</li>
-      <li><strong>Change management</strong> — staff used to "VPN = access everything" need to understand why an app they used to reach is now denied until explicitly authorised; this is a communication problem as much as a technical one.</li>
-      <li><strong>Connector sprawl and latency</strong> — many small on-prem sites each need a connector, which adds operational overhead and, for a globally distributed workforce, an extra broker hop to account for.</li>
-      <li>As above: ZTNA reduces network exposure, but doesn't remove the need for the application's own authorisation logic — that's a separate, ongoing piece of work, not something the ZTNA rollout finishes on its own.</li>
-    </ul>`},
-    {h:'Preferred technologies / vendors', html:`<p style="font-size:14px;color:var(--ink-soft)">I keep the requirement vendor-neutral first and select tooling second, but for a mixed SaaS/legacy estate I'd shortlist a broker-based platform such as <strong>Zscaler Private Access</strong>, <strong>Cloudflare Access</strong>, <strong>Microsoft Entra Private Access</strong> (a strong fit if the identity provider is already Entra ID) or <strong>Palo Alto Prisma Access</strong>, paired with the existing identity provider as the policy decision point and a device-compliance source (e.g. Intune) as the posture signal. These are illustrative examples, not a final recommendation — the actual choice depends on existing identity investment, the protocol mix of the legacy estate, and licensing. The framework guide's <a href="#/discipline/network">Network & perimeter security discipline</a> and <a href="#/domain/NET">NET baseline domain</a> set out the same default-deny-plus-ZTNA-over-flat-VPN principle in more detail, with a fuller <a href="#/tools">tool catalogue</a> alongside it.</p>`}
+  html += qa(2, 'How would you implement ZTNA in a mixed SaaS and legacy server/application environment? Outline your proposed architecture, implementation approach, key benefits, potential challenges, and preferred technologies or vendors.', [
+    {h:'Architecture', diagram:'d-apply-ztna', html: bl([
+      'Replace flat-network VPN trust with a <strong>broker-based ZTNA model</strong>: an identity-aware policy engine sits in front of every application.',
+      'Access is granted <strong>per-application, per-session</strong>, based on identity, device posture and context — never on which network segment the user is connected to.',
+      'SaaS applications integrate natively through the existing identity provider (SSO / OIDC / SAML plus conditional access).',
+      'Legacy on-premises applications sit behind a lightweight connector that opens an <strong>outbound-only</strong> tunnel to the broker — no inbound firewall hole, app never directly internet-reachable.',
+      'Device-compliance signal (managed vs unmanaged, patch state) feeds every access decision alongside identity.',
+      `ZTNA replaces the <em>network</em> trust boundary, not <em>application-level authorisation</em> — the app still checks the caller is allowed to see the specific resource requested, the same principle as the <a href="#/checkpoint">firewall/WAF/API checkpoint</a> in the guide.`
+    ])},
+    {h:'Implementation approach', diagram:'d-apply-ztna-rollout', html: bl([
+      'Phased, starting with the highest-confidence win: <strong>SaaS apps first</strong> — usually already support modern federated auth.',
+      '<strong>Legacy apps next</strong>, one at a time, starting with the least business-critical system to validate the pattern before touching anything sensitive.',
+      'Each app: deploy connector → define access policy → cut over a small pilot group → negative-test (unauthorised/non-compliant device correctly denied) → expand to full user base.',
+      `VPN for that specific app is switched off once ZTNA is proven for it — never run both indefinitely, since that doubles the attack surface. Mirrors the <a href="#/stage/5">implement-pilot-expand pattern</a> in the guide.`
+    ])},
+    {h:'Key benefits', html: bl([
+      'Eliminates lateral movement risk from flat VPN access — a compromised laptop reaches only the apps it was already authorised for.',
+      'One consistent access model across SaaS, cloud and on-prem legacy, instead of three different remote-access tools.',
+      'Continuous, contextual evaluation instead of a one-time login — a session can be revoked mid-flight if posture changes.',
+      'Centralised, per-app, per-identity audit trail, instead of inferring access from network flow logs.',
+      'Better hybrid/remote user experience — per-app access that works the same from anywhere, no full-tunnel VPN client.'
+    ])},
+    {h:'Potential challenges', html: bl([
+      '<strong>Non-HTTP legacy protocols</strong> — some apps need TCP/UDP-level tunnelling, not every ZTNA product handles this equally well.',
+      '<strong>No modern auth on the legacy app</strong> — systems predating SAML/OIDC need an auth wrapper or bridging pattern.',
+      '<strong>Device posture gaps on BYOD</strong> — unmanaged personal devices can\'t always provide the compliance signal, forcing an explicit risk decision.',
+      '<strong>Change management</strong> — staff used to "VPN = access everything" need to understand app-by-app access.',
+      '<strong>Connector sprawl and latency</strong> — many small on-prem sites each need a connector, plus an extra broker hop for distributed users.',
+      'ZTNA reduces network exposure but doesn\'t remove the need for the application\'s own authorisation logic — that remains separate, ongoing work.'
+    ])},
+    {h:'Preferred technologies / vendors', html: bl([
+      'Vendor-neutral requirement first, tooling second — these are illustrative shortlist examples, not a final recommendation.',
+      '<strong>Zscaler Private Access</strong>, <strong>Cloudflare Access</strong>, <strong>Microsoft Entra Private Access</strong> (strong fit if already on Entra ID), or <strong>Palo Alto Prisma Access</strong> as the broker.',
+      'Paired with the existing identity provider as the policy decision point, and a device-compliance source (e.g. Intune) as the posture signal.',
+      `Same principle set out in more depth in the guide's <a href="#/discipline/network">Network & perimeter security discipline</a> and <a href="#/domain/NET">NET baseline domain</a>, with a fuller <a href="#/tools">tool catalogue</a> alongside it.`
+    ])}
   ]);
 
   html += `<div class="card" style="text-align:center;background:var(--surface-2)">
