@@ -1891,8 +1891,27 @@ function svgEl(tag, attrs){
   return el;
 }
 function cssVar(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
-function renderDiagram(id){
-  const d = DIAGRAMS[id];
+function wrapLabel(text, width){
+  width = width || 16;
+  const words = String(text).split(' ');
+  const lines = []; let cur = '';
+  words.forEach(w=>{
+    if((cur + ' ' + w).trim().length > width){ if(cur) lines.push(cur.trim()); cur = w; }
+    else cur = (cur + ' ' + w).trim();
+  });
+  if(cur) lines.push(cur.trim());
+  return lines.slice(0,3).join('\n');
+}
+function buildFlowDiagram(title, caption, steps){
+  return {
+    title, caption,
+    nodes: steps.map((s,i)=>({id:'n'+i, kind: i===steps.length-1 ? 'accepted' : (i===0 ? 'owner' : 'control'), x:i*1.35, y:0, label:(i+1)+'. '+wrapLabel(s,15)})),
+    edges: steps.slice(1).map((s,i)=>({from:'n'+i, to:'n'+(i+1)}))
+  };
+}
+function renderDiagram(idOrData){
+  const id = typeof idOrData === 'string' ? idOrData : ('inline-'+Math.random().toString(36).slice(2));
+  const d = typeof idOrData === 'string' ? DIAGRAMS[idOrData] : idOrData;
   if(!d) return '<p class="lede">Diagram not yet available.</p>';
   const cellW = 190, cellH = 110, pad = 40;
   let maxX = 0, maxY = 0;
@@ -2234,6 +2253,7 @@ function pageOverview(){
     <div class="stat"><div class="n">${BASELINE_CONTROLS.length}</div><div class="l">Baseline controls</div></div>
     <div class="stat"><div class="n">${DOMAINS.length}</div><div class="l">Baseline domains</div></div>
   </div>
+  ${renderDiagram('d-apply-roadmap')}
   <div class="section-h"><h2>Stages</h2></div>
   <div class="grid grid-3">`;
   STAGES.forEach(s=>{
@@ -2313,7 +2333,8 @@ function pageDisciplines(activeId){
       </div>
     </div>
   </div>
-  <div class="section-h"><h2>Stage 1 → 7 walkthrough</h2></div>`;
+  <div class="section-h"><h2>Stage 1 → 7 walkthrough</h2></div>
+  ${renderDiagram(buildFlowDiagram(active.name+' across the seven stages', 'How this discipline\'s focus shifts stage by stage, from governance through to assurance.', active.stages.map(s=>s.focus)))}`;
   active.stages.forEach((s,i)=>{
     const stage = STAGES[i];
     const stageLabel = stage ? `Stage ${stage.num} — ${stage.name}` : `Stage ${i+1}`;
@@ -2578,6 +2599,8 @@ function pageCapabilities(){
 function pageRollout(){
   let html = `<div class="crumbs"><a href="#/overview">Overview</a> / Rollout priorities</div>
   <h1>Rollout priorities</h1>
+  <p class="lede">The order in which effort pays off across the whole estate, not just one service.</p>
+  ${renderDiagram(buildFlowDiagram('Rollout priority sequence', 'From standing up authority and fixing urgent exposure, through shared foundations and delivery protection, to a proven pilot, wider adoption, and finally sustained assurance.', ROLLOUT.map(r=>r.phase)))}
   <div class="grid grid-3">
   ${ROLLOUT.map((r,i)=>`<div class="card"><div class="pill cobalt">${i+1}</div><h3 style="font-size:14.5px;margin:10px 0 6px">${esc(r.phase)}</h3><p style="font-size:13px;color:var(--ink-soft);margin:0">${esc(r.desc)}</p></div>`).join('')}
   </div>` + footer();
@@ -2827,6 +2850,11 @@ function pageDomain(code){
     <div><div class="k">Standards</div><div class="v">${d.standards.join('; ')}</div></div>
     <div><div class="k">External references</div><div class="v">${d.externalRefs.join('; ')}</div></div>
   </div>`;
+  html += renderDiagram(buildFlowDiagram(
+    `${d.code} — five-step implementation recipe`,
+    `The implementation recipe for ${d.name}, in order. Greenfield builds this in from the start; existing environments retrofit it against what's already running.`,
+    d.recipe
+  ));
   html += renderGuidedPhase({
     why: d.purpose,
     steps: d.recipe.map((step,i)=>({
