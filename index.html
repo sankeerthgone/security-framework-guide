@@ -2120,27 +2120,22 @@ DIAGRAMS['d-apply-roadmap'] = {
 };
 DIAGRAMS['d-apply-ztna'] = {
   title:'ZTNA architecture for a mixed SaaS + legacy environment',
-  caption:'A single identity-aware policy engine brokers every access decision. SaaS apps integrate natively; legacy on-prem apps sit behind an outbound-only connector so no inbound firewall hole is ever opened.',
-  zones:[
-    {x:0,y:0,w:1.5,h:2.6,label:'User / device'},
-    {x:1.6,y:0,w:1.7,h:2.6,label:'Policy engine'},
-    {x:3.4,y:0,w:1.6,h:1.1,label:'SaaS'},
-    {x:3.4,y:1.4,w:1.6,h:1.2,label:'On-premises'}
-  ],
+  caption:'A concrete reference stack, top to bottom: the user device authenticates to the identity provider, the ZTNA service edge makes the per-app policy decision, and outbound-only app connectors reach legacy on-prem systems — no inbound firewall hole is ever opened. SaaS apps branch off the identity provider directly via native SSO, so the same policy engine governs both paths.',
+  zones:[{x:0,y:0,w:2.4,h:6.0,label:'Request path, top to bottom'}],
   nodes:[
-    {id:'user', kind:'identity', x:0, y:0.7, label:'User + device\n(posture checked)'},
-    {id:'idp', kind:'owner', x:1.6, y:0.1, label:'Identity provider\n(policy decision)'},
-    {id:'broker', kind:'control', x:1.6, y:1.4, label:'ZTNA broker\n(per-app, per-session)'},
-    {id:'saas', kind:'data', x:3.4, y:0.15, label:'SaaS apps\n(native SSO/OIDC)'},
-    {id:'conn', kind:'control', x:3.4, y:1.5, label:'Outbound-only\nconnector'},
-    {id:'legacy', kind:'data', x:3.4, y:2.5, w:0, label:''},
-    {id:'legacyapp', kind:'denied', x:3.4, y:2.05, label:'Legacy app\n(no inbound hole)'}
+    {id:'device', kind:'identity', x:0, y:0, w:2.4, label:'User device\n(Zscaler Client Connector + EDR)'},
+    {id:'idp', kind:'owner', x:0, y:1.1, w:2.4, label:'Identity provider (Entra ID)\nAuth + MFA + Groups + Conditional Access'},
+    {id:'saas', kind:'data', x:2.6, y:1.1, label:'SaaS apps\n(native SSO/OIDC)'},
+    {id:'edge', kind:'control', x:0, y:2.2, w:2.4, label:'Zscaler ZPA Service Edge\nPolicy engine + broker'},
+    {id:'connector', kind:'control', x:0, y:3.3, w:2.4, label:'ZPA App Connectors\nOutbound-only tunnels from DC/Cloud'},
+    {id:'legacy', kind:'denied', x:0, y:4.4, w:2.4, label:'Legacy apps / servers\nHR Portal, ERP, RDP, SMB, APIs, etc.'}
   ],
   edges:[
-    {from:'user', to:'idp', label:'authenticate'},{from:'idp', to:'broker'},
-    {from:'broker', to:'saas', label:'per-app policy'},
-    {from:'broker', to:'conn', label:'per-app policy'},
-    {from:'conn', to:'legacyapp', label:'outbound tunnel'}
+    {from:'device', to:'idp', label:'authenticate'},
+    {from:'idp', to:'saas', label:'native SSO'},
+    {from:'idp', to:'edge', label:'CA policy passed'},
+    {from:'edge', to:'connector', label:'per-app policy'},
+    {from:'connector', to:'legacy', label:'outbound tunnel only\n(no inbound hole)'}
   ]
 };
 DIAGRAMS['d-apply-ztna-rollout'] = {
@@ -2199,12 +2194,14 @@ function pageApplication(){
 
   html += qa(2, 'How would you implement ZTNA in a mixed SaaS and legacy server/application environment? Outline your proposed architecture, implementation approach, key benefits, potential challenges, and preferred technologies or vendors.', [
     {h:'Architecture', diagram:'d-apply-ztna', html: bl([
-      'Replace flat-network VPN trust with a <strong>broker-based ZTNA model</strong>: an identity-aware policy engine sits in front of every application.',
-      'Access is granted <strong>per-application, per-session</strong>, based on identity, device posture and context — never on which network segment the user is connected to.',
-      'SaaS applications integrate natively through the existing identity provider (SSO / OIDC / SAML plus conditional access).',
-      'Legacy on-premises applications sit behind a lightweight connector that opens an <strong>outbound-only</strong> tunnel to the broker — no inbound firewall hole, app never directly internet-reachable.',
-      'Device-compliance signal (managed vs unmanaged, patch state) feeds every access decision alongside identity.',
-      `ZTNA replaces the <em>network</em> trust boundary, not <em>application-level authorisation</em> — the app still checks the caller is allowed to see the specific resource requested, the same principle as the <a href="#/checkpoint">firewall/WAF/API checkpoint</a> in the guide.`
+      'Replace flat-network VPN trust with a <strong>broker-based ZTNA model</strong> — illustrated here as a concrete reference stack, not just a concept.',
+      '<strong>User device</strong> — Zscaler Client Connector plus EDR provide the posture signal (managed, patched, healthy) before any access decision is made.',
+      '<strong>Identity provider (Entra ID)</strong> — authentication, MFA, group membership and Conditional Access is evaluated first; this is the single policy decision point for both SaaS and legacy paths.',
+      '<strong>SaaS apps</strong> branch directly off the identity provider via native SSO/OIDC — no broker hop needed for apps that already speak modern auth.',
+      '<strong>Zscaler ZPA Service Edge</strong> — the policy engine and broker that makes the per-application, per-session access decision for everything that isn\'t native SaaS.',
+      '<strong>ZPA App Connectors</strong> — lightweight software placed in the datacentre/cloud that open <strong>outbound-only</strong> tunnels back to the Service Edge; no inbound firewall rule is ever opened.',
+      '<strong>Legacy apps / servers</strong> — HR Portal, ERP, RDP, SMB file shares, internal APIs and similar systems reached only through the connector, never directly internet-exposed.',
+      `Important boundary: ZTNA replaces the <em>network</em> trust decision, not <em>application-level authorisation</em> — the app itself still has to check the caller is allowed to see the specific resource requested, the same principle as the <a href="#/checkpoint">firewall/WAF/API checkpoint</a> in the guide.`
     ])},
     {h:'Implementation approach', diagram:'d-apply-ztna-rollout', html: bl([
       'Phased, starting with the highest-confidence win: <strong>SaaS apps first</strong> — usually already support modern federated auth.',
